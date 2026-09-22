@@ -1,0 +1,14 @@
+{
+  "tribunal": "tjmg",
+  "processos": [
+    "0000000-00.0000.8.13.0000",
+    "0000000-00.0000.8.13.0000"
+  ],
+  "delay_segundos_entre_consultas": 1.5,
+  "smtp": {
+    "servidor": "smtp.gmail.com",
+    "porta": 587,
+    "usuario": "seu_email@gmail.com",
+    "destinatario": "seu_email@gmail.com"
+  }
+}

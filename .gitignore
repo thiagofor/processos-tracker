@@ -1,0 +1,6 @@
+config.json
+*.env
+estado_processos.json
+processos_tracker.log
+__pycache__/
+*.pyc
