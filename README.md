@@ -13,11 +13,27 @@ sem necessidade de login, senha de advogado ou resolução de CAPTCHA.
 ```bash
 pip install -r requirements.txt
 ```
+## 2. Executar via Interface Web (Recomendado)
 
-## 2. Configurar os processos
+Para abrir o painel de controlo interativo no navegador:
 
-Copie o arquivo de exemplo e edite com os números reais (formato CNJ, com ou
-sem pontuação — o script limpa sozinho):
+```bash
+streamlit run app.py
+```
+
+No Windows, também pode simplesmente dar duplo clique no ficheiro iniciar_app.bat.
+
+### Recursos da Interface Web:
+- Estado Atual: Exibe os processos com formatação compacta e legível contendo metadados completos (Classe, Órgão Julgador, Sistema, Data de Ajuizamento formatada, Assuntos e Última Movimentação).
+- Gerir Processos: Adicionar ou remover números de processos sem necessidade de editar ficheiros JSON manualmente.
+- Definições: Ajustar tribunal, atraso de rede, credenciais SMTP e guardar a Senha de App do Gmail de forma segura diretamente no ficheiro .env.
+- Logs: Visualizador em tempo real dos registos de execução (processos_tracker.log).
+
+
+## 3. Configuração Manual (Sem Interface)
+
+### 3.1. Processos (config.json)
+Copie o ficheiro de exemplo e edite com os números reais:
 
 ```bash
 cp config.exemplo.json config.json
@@ -29,6 +45,7 @@ cp config.exemplo.json config.json
   "processos": [
     "5001234-56.2024.8.13.0024"
   ],
+  "delay_segundos_entre_consultas": 1.5,
   "smtp": {
     "servidor": "smtp.gmail.com",
     "porta": 587,
@@ -38,29 +55,14 @@ cp config.exemplo.json config.json
 }
 ```
 
-## 3. Configurar a senha de e-mail (nunca no config.json!)
+### 3.2. Senha de E-mail (.env)
+Crie um arquivo com o nome exato .env na raiz do projeto com a sua Senha de Aplicação do Gmail:
 
-Defina a variável de ambiente `EMAIL_SENHA` antes de rodar. Se o remetente for
-Gmail, **não use a senha normal** — gere uma "senha de app" em
-myaccount.google.com/apppasswords (precisa de verificação em duas etapas
-ativada).
-
-Linux/Mac:
 ```bash
-export EMAIL_SENHA="sua_senha_de_app"
-```
-
-Windows (PowerShell):
-```powershell
-$env:EMAIL_SENHA = "sua_senha_de_app"
-```
-
-Alternativa: crie um arquivo chamado **exatamente `.env`** (com o ponto na
-frente, sem nada antes) na mesma pasta — o script já lê sozinho, se
-`python-dotenv` estiver instalado:
-```
 EMAIL_SENHA=sua_senha_de_app
 ```
+
+(Nota: Se utilizar a Interface Web, esta variável é gravada automaticamente no .env ao salvar as definições).
 
 > ⚠️ No Windows é fácil o Explorer salvar como `.env.txt` ou o arquivo acabar
 > com outro nome (ex.: `EMAIL_SENHA.env`) — nesse caso o `python-dotenv` não
@@ -72,7 +74,9 @@ script. Se o CNJ trocar essa chave e o script parar de funcionar, pegue a nova
 em https://datajud-wiki.cnj.jus.br/api-publica/acesso/ e defina
 `DATAJUD_API_KEY` do mesmo jeito que `EMAIL_SENHA`.
 
-## 4. Rodar
+## 4. Executar via Linha de Comando
+
+Execução Única:
 
 ```bash
 python processos_tracker.py
@@ -100,42 +104,37 @@ python testar_email.py
 Ele usa o mesmo `config.json` e a mesma `EMAIL_SENHA`/`.env` do script
 principal e manda um e-mail de teste avulso.
 
-## 5. Automatizar (recomendado em vez do --loop)
+## 5. Automação e Segundo Plano
 
-**Linux/Mac (cron)** — roda todo dia às 8h:
+### Windows (Agendador de Tarefas — Recomendado)
+Crie uma tarefa para executar python.exe processos_tracker.py apontando o campo "Iniciar em" para a pasta do projeto. Defina a frequência desejada (ex.: a cada 6 horas).
+
+### Windows (Modo Oculto / Sem Janela Aberta)
+Para rodar o loop contínuo em segundo plano sem manter a janela de terminal aberta, pode criar e executar um ficheiro iniciar_oculto.vbs:
+
+```bash
+Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "pythonw.exe processos_tracker.py --loop 6h", 0, False
 ```
+
+### Linux / Mac (cron)
+Exemplo para rodar diariamente às 08:00:
+
+```bash
 0 8 * * * cd /caminho/para/processos_tracker && /usr/bin/python3 processos_tracker.py >> cron.log 2>&1
 ```
 
-**Windows (Agendador de Tarefas)**: crie uma tarefa que execute
-`python.exe processos_tracker.py` com "Iniciar em" apontando para a pasta do
-script, no gatilho e frequência que preferir. Lembre-se de configurar
-`EMAIL_SENHA` como variável de ambiente do sistema (ou usar um `.env`), já que
-tarefas agendadas não herdam variáveis definidas manualmente no terminal.
 
-## Arquivos gerados automaticamente
+## Arquivos do Projeto
 
-- `estado_processos.json`: guarda a última movimentação vista de cada
-  processo. Não apague, ou o script vai reenviar o histórico todo como
-  "novidade" na próxima rodada.
-- `processos_tracker.log`: log de cada execução.
+- app.py: Interface gráfica Web desenvolvida em Streamlit.
+- processos_tracker.py: Script principal com lógica de consulta, retentativas automáticas contra instabilidades da API e envio de alertas.
+- iniciar_app.bat: Script de atalho para iniciar o servidor web no Windows.
+- estado_processos.json: Armazena a linha de base e os metadados dos processos consultados.
+- processos_tracker.log: Ficheiro de logs de execução do sistema.
 
-## Se for versionar com Git
 
-O `.gitignore` incluído já cobre `config.json`, `*.env`,
-`estado_processos.json`, `processos_tracker.log`, `__pycache__/` e `*.pyc`.
-Antes do primeiro commit, rode `git status` e confirme que nenhum desses
-arquivos aparece na lista — se um deles já tiver sido commitado antes do
-`.gitignore` existir, `git rm --cached <arquivo>` não apaga o histórico
-anterior; nesse caso, o mais simples é recriar o repositório do zero. Se uma
-senha chegar a ser commitada (mesmo que depois removida), trate-a como
-comprometida e gere uma nova senha de app imediatamente.
-
-## Limitações
-
-- A API DataJud é alimentada pelos tribunais e pode ter atraso de replicação
-  em relação ao sistema interno (PJe/e-SAJ) — normalmente de poucas horas.
-- Processos em segredo de justiça não aparecem na consulta pública.
-- Fica a seu critério confirmar prazos processuais oficiais direto no sistema
-  do tribunal antes de qualquer decisão importante; o script é só um radar de
-  monitoramento, não substitui a intimação oficial.
+## Limitações e Notas
+- A API pública do DataJud pode apresentar momentos de lentidão ou indisponibilidade temporária. O script conta com mecanismos de retentativa e tempo de espera (timeout) estendido de 30 segundos.
+- Processos em segredo de justiça não são disponibilizados pela API pública do CNJ.
+- Esta ferramenta funciona como um radar de acompanhamento e não substitui as publicações nos diários oficiais nem as intimações formais do tribunal.

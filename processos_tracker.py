@@ -111,6 +111,9 @@ class ResultadoProcesso:
     movimentos: list[Movimento] = field(default_factory=list)
     classe: str | None = None
     orgao_julgador: str | None = None
+    assuntos: list[str] = field(default_factory=list)
+    data_ajuizamento: str | None = None
+    sistema: str | None = None
 
 
 # --------------------------------------------------------------------------- #
@@ -123,9 +126,9 @@ def limpar_numero_processo(numero: str) -> str:
 
 
 def consultar_processo(
-    numero_processo: str, tribunal: str, api_key: str, timeout: int = 15
+    numero_processo: str, tribunal: str, api_key: str, timeout: int = 30, retentativas: int = 3
 ) -> ResultadoProcesso:
-    """Consulta um processo na API Pública do DataJud."""
+    """Consulta um processo na API Pública do DataJud com suporte a retentativas."""
     numero_limpo = limpar_numero_processo(numero_processo)
     url = f"{DATAJUD_URL_BASE}/api_publica_{tribunal.lower()}/_search"
     headers = {
@@ -136,14 +139,22 @@ def consultar_processo(
 
     resultado = ResultadoProcesso(numero=numero_processo)
 
-    try:
-        resp = requests.post(url, headers=headers, json=corpo, timeout=timeout)
-    except requests.RequestException as exc:
-        resultado.erro = f"Falha de conexão: {exc}"
-        return resultado
+    resp = None
+    for tentativa in range(1, retentativas + 1):
+        try:
+            resp = requests.post(url, headers=headers, json=corpo, timeout=timeout)
+            break  # Requisição concluída com sucesso (mesmo com HTTP != 200)
+        except requests.RequestException as exc:
+            if tentativa == retentativas:
+                resultado.erro = f"Falha de conexão após {retentativas} tentativas: {exc}"
+                return resultado
+            log.warning("  -> Timeout/Instabilidade na API (tentativa %d/%d). A aguardar para tentar novamente...", tentativa, retentativas)
+            time.sleep(3 * tentativa)  # Pausa progressiva (3s, 6s) antes de tentar de novo
 
-    if resp.status_code != 200:
-        resultado.erro = f"HTTP {resp.status_code}: {resp.text[:300]}"
+    if resp is None or resp.status_code != 200:
+        status = resp.status_code if resp else "Sem Resposta"
+        texto = resp.text[:300] if resp else ""
+        resultado.erro = f"HTTP {status}: {texto}"
         return resultado
 
     dados = resp.json()
@@ -156,6 +167,15 @@ def consultar_processo(
     resultado.encontrado = True
     resultado.classe = (fonte.get("classe") or {}).get("nome")
     resultado.orgao_julgador = (fonte.get("orgaoJulgador") or {}).get("nome")
+    
+    # Detalhes adicionais da ação
+    resultado.data_ajuizamento = fonte.get("dataAjuizamento")
+    resultado.sistema = (fonte.get("sistema") or {}).get("nome")
+    
+    assuntos_raw = fonte.get("assuntos", []) or []
+    resultado.assuntos = [
+        a.get("nome") for a in assuntos_raw if isinstance(a, dict) and a.get("nome")
+    ]
 
     movimentos_brutos = fonte.get("movimentos", []) or []
     movimentos = [
@@ -276,6 +296,13 @@ def rodar_verificacao() -> None:
                 bloco.append(f"Classe: {resultado.classe}")
             if resultado.orgao_julgador:
                 bloco.append(f"Órgão julgador: {resultado.orgao_julgador}")
+            if resultado.sistema:
+                bloco.append(f"Sistema: {resultado.sistema}")
+            if resultado.data_ajuizamento:
+                bloco.append(f"Data de ajuizamento: {resultado.data_ajuizamento}")
+            if resultado.assuntos:
+                bloco.append(f"Assunto(s): {', '.join(resultado.assuntos)}")
+            
             bloco.append("Movimentações novas:")
             bloco.extend(f"  - {m}" for m in novos_movimentos)
             novidades.append("\n".join(bloco))
@@ -285,6 +312,11 @@ def rodar_verificacao() -> None:
         estado[numero] = {
             "ultima_movimentacao": resultado.movimentos[-1].data_hora,
             "verificado_em": datetime.now().isoformat(timespec="seconds"),
+            "classe": resultado.classe,
+            "orgao_julgador": resultado.orgao_julgador,
+            "sistema": resultado.sistema,
+            "data_ajuizamento": resultado.data_ajuizamento,
+            "assuntos": resultado.assuntos,
         }
         time.sleep(delay_entre_consultas)
 
