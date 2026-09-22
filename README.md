@@ -55,11 +55,17 @@ Windows (PowerShell):
 $env:EMAIL_SENHA = "sua_senha_de_app"
 ```
 
-Alternativa: crie um arquivo `.env` na mesma pasta (o script já lê sozinho, se
-`python-dotenv` estiver instalado):
+Alternativa: crie um arquivo chamado **exatamente `.env`** (com o ponto na
+frente, sem nada antes) na mesma pasta — o script já lê sozinho, se
+`python-dotenv` estiver instalado:
 ```
 EMAIL_SENHA=sua_senha_de_app
 ```
+
+> ⚠️ No Windows é fácil o Explorer salvar como `.env.txt` ou o arquivo acabar
+> com outro nome (ex.: `EMAIL_SENHA.env`) — nesse caso o `python-dotenv` não
+> encontra o arquivo e a variável não é carregada. Confirme com
+> `Get-ChildItem -Force` no PowerShell que o nome está exatamente `.env`.
 
 A chave da API do DataJud já vem com um valor público padrão embutido no
 script. Se o CNJ trocar essa chave e o script parar de funcionar, pegue a nova
@@ -82,6 +88,18 @@ Para rodar em loop contínuo em vez de uma vez só:
 python processos_tracker.py --loop 6h
 ```
 
+## 4.1 Testar só o envio de e-mail
+
+Pra confirmar que a senha de app e o SMTP estão certos sem precisar esperar
+uma movimentação real:
+
+```bash
+python testar_email.py
+```
+
+Ele usa o mesmo `config.json` e a mesma `EMAIL_SENHA`/`.env` do script
+principal e manda um e-mail de teste avulso.
+
 ## 5. Automatizar (recomendado em vez do --loop)
 
 **Linux/Mac (cron)** — roda todo dia às 8h:
@@ -101,6 +119,17 @@ tarefas agendadas não herdam variáveis definidas manualmente no terminal.
   processo. Não apague, ou o script vai reenviar o histórico todo como
   "novidade" na próxima rodada.
 - `processos_tracker.log`: log de cada execução.
+
+## Se for versionar com Git
+
+O `.gitignore` incluído já cobre `config.json`, `*.env`,
+`estado_processos.json`, `processos_tracker.log`, `__pycache__/` e `*.pyc`.
+Antes do primeiro commit, rode `git status` e confirme que nenhum desses
+arquivos aparece na lista — se um deles já tiver sido commitado antes do
+`.gitignore` existir, `git rm --cached <arquivo>` não apaga o histórico
+anterior; nesse caso, o mais simples é recriar o repositório do zero. Se uma
+senha chegar a ser commitada (mesmo que depois removida), trate-a como
+comprometida e gere uma nova senha de app imediatamente.
 
 ## Limitações
 
